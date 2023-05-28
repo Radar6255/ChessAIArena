@@ -1,0 +1,6 @@
+.session
+Makefile
+*.cmake
+ChessAIArena
+CMakeFiles
+CMakeCache.txt
