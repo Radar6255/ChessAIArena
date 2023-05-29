@@ -6,4 +6,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED 17)
 
 add_compile_options(-Wall -Wextra -pedantic -g)
 
-add_executable(ChessAIArena main.cpp)
+add_executable(ChessAIArena main.cpp Chess.cpp Matchmaking.cpp)
