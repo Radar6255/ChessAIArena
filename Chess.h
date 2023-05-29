@@ -1,6 +1,8 @@
 #ifndef CHESS_H
 #define CHESS_H
 
+#include <atomic>
+#include <crow/websocket.h>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -40,8 +42,13 @@ struct pair_equal {
 
 class Chess {
 public:
+    Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst);
     bool performMove(std::string move, bool isWhite);
 private:
+    std::atomic<bool> isWhiteTurn;
+
+    crow::websocket::connection* connections[2];
+
     short board[8][8] = {
         { WHITE_ROOK,   WHITE_KNIGHT,   WHITE_BISHOP,   WHITE_QUEEN,    WHITE_KING,     WHITE_BISHOP,   WHITE_KNIGHT,   WHITE_ROOK },
         { WHITE_PAWN,   WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN },

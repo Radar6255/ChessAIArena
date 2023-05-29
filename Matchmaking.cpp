@@ -19,12 +19,13 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
             inQueue.pop();
             inQueueMutex.unlock();
 
-            std::shared_ptr<Chess> t = std::make_shared<Chess>();
-
             // TODO Flip coin to determine who goes first
             bool playerFirst = false;
-            ChessPlayer *opponentData = new ChessPlayer(t, !playerFirst);
+            std::shared_ptr<Chess> t = std::make_shared<Chess>(&conn, opponent, playerFirst);
+
             ChessPlayer *playerData = new ChessPlayer(t, playerFirst);
+            ChessPlayer *opponentData = new ChessPlayer(t, !playerFirst);
+
 
             opponent->userdata(opponentData);
             conn.userdata(playerData);

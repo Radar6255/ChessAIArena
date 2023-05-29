@@ -1,3 +1,4 @@
+#include <crow/websocket.h>
 #include <iostream>
 #include <memory>
 #include <ostream>
@@ -27,7 +28,20 @@ std::pair<short, short> convertToXY(std::string coords) {
     return std::make_pair(coords[1] - '1', coords[0] - 'a');
 }
 
+Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst) {
+    if (whiteFirst) {
+        connections[0] = whiteConn;
+        connections[1] = blackConn;
+    }
+    connections[0] = blackConn;
+    connections[1] = whiteConn;
+    isWhiteTurn = true;
+}
+
 bool Chess::performMove(std::string move, bool isWhite) {
+    if (isWhiteTurn != isWhite) {
+        return false;
+    }
     // First we need to figure out what the move is
     std::smatch sm;
     std::regex re("[KQRBN]?([a-h][1-8])([a-h][1-8])");
@@ -36,6 +50,11 @@ bool Chess::performMove(std::string move, bool isWhite) {
     // The first element is the start square
     std::string start = sm[1].str();
     std::pair<short, short> startXY = convertToXY(start);
+
+    // Checking to see if a piece is there or isn't their piece
+    if (board[startXY.first][startXY.second] == EMPTY || isPieceWhite(board[startXY.first][startXY.second]) != isWhite) {
+        return false;
+    }
 
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = getPieceMoves(startXY.first, startXY.second);
 
@@ -52,6 +71,10 @@ bool Chess::performMove(std::string move, bool isWhite) {
     // Probably should have a lock here so no one can read the board in a bad state
     board[destXY.first][destXY.second] = board[startXY.first][startXY.second];
     board[startXY.first][startXY.second] = EMPTY;
+
+    isWhiteTurn = !isWhiteTurn;
+
+    connections[isWhiteTurn]->send_text(move);
 
     return true;
 }
