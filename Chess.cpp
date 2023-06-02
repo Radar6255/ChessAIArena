@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <regex>
 #include <utility>
@@ -24,18 +25,59 @@ bool isPieceWhite(short piece) {
     return isWhite;
 }
 
+std::string pieceToString(short piece) {
+    switch (piece) {
+        case BLACK_PAWN:
+            return "BP";
+        case BLACK_ROOK:
+            return "BR";
+        case BLACK_KING:
+            return "BK";
+        case BLACK_QUEEN:
+            return "BQ";
+        case BLACK_BISHOP:
+            return "BB";
+        case BLACK_KNIGHT:
+            return "BN";
+        case WHITE_PAWN:
+            return "WP";
+        case WHITE_ROOK:
+            return "WR";
+        case WHITE_KING:
+            return "WK";
+        case WHITE_QUEEN:
+            return "WQ";
+        case WHITE_BISHOP:
+            return "WB";
+        case WHITE_KNIGHT:
+            return "WN";
+        default:
+            return "";
+    }
+}
+
 std::pair<short, short> convertToXY(std::string coords) {
     return std::make_pair(coords[1] - '1', coords[0] - 'a');
 }
 
-Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst) {
+Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst, size_t id) {
     if (whiteFirst) {
         connections[0] = whiteConn;
         connections[1] = blackConn;
     }
     connections[0] = blackConn;
     connections[1] = whiteConn;
+
     isWhiteTurn = true;
+    this->id = id;
+
+    // Now we need to setup each players piece locations
+    for (int x = 0; x < 2; x++) {
+        for (int y = 0; y < 8; y++) {
+            whitePieceLocations.insert(std::make_pair(x, y));
+            blackPieceLocations.insert(std::make_pair(7 - x, y));
+        }
+    }
 }
 
 bool Chess::performMove(std::string move, bool isWhite) {
@@ -67,16 +109,89 @@ bool Chess::performMove(std::string move, bool isWhite) {
         return false;
     }
 
+    performMoveMutex.lock();
+    // This could be the case if the user tried to send two moves
+    if (isWhiteTurn != isWhite) {
+        performMoveMutex.unlock();
+        return false;
+    }
+
     // Now we need to perform the move
     // Probably should have a lock here so no one can read the board in a bad state
     board[destXY.first][destXY.second] = board[startXY.first][startXY.second];
     board[startXY.first][startXY.second] = EMPTY;
 
+    if (isWhite) {
+        whitePieceLocations.erase(startXY);
+        blackPieceLocations.erase(destXY);
+        whitePieceLocations.insert(destXY);
+    } else {
+        blackPieceLocations.erase(startXY);
+        whitePieceLocations.erase(destXY);
+        blackPieceLocations.insert(destXY);
+    }
+
     isWhiteTurn = !isWhiteTurn;
 
+    /* std::stringstream moveString; */
+    /* moveString << id << ":" << move; */
+
+    /* connections[isWhiteTurn]->send_text(moveString.str()); */
     connections[isWhiteTurn]->send_text(move);
+    performMoveMutex.unlock();
 
     return true;
+}
+
+std::string stringFromXY(std::pair<short, short> coords) {
+    std::stringstream out;
+    out << (char) (coords.second + 'a') << coords.first + 1;
+    return out.str();
+}
+
+std::stringstream Chess::getPieceLocations(bool isWhite) {
+    std::stringstream output;
+
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> *pieceLocations = isWhite ? &whitePieceLocations : &blackPieceLocations;
+
+    bool first = true;
+
+    output << "[";
+    for (auto it = pieceLocations->begin(); it != pieceLocations->end(); it++) {
+        if (first) {
+            first = false;
+        } else {
+            output << ",";
+        }
+
+        output << "\"" << stringFromXY(*it) << "\"";
+    }
+    output << "]";
+
+    return output;
+}
+
+std::stringstream Chess::getBoardState() {
+    std::stringstream output;
+
+    output << "[";
+    for (int x = 0; x < 8; x++) {
+        if (x != 0) {
+            output << ",";
+        }
+        output << "[";
+        for (int y = 0; y < 8; y++) {
+            if (y != 0) {
+                output << ",";
+            }
+
+            output << "\"" << pieceToString(board[x][y]) << "\"";
+        }
+        output << "]";
+    }
+    output << "]";
+
+    return output;
 }
 
 std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> Chess::getPieceMoves(short row, short col) {

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <queue>
 #include <memory>
+#include <sstream>
 
 Matchmaking::Matchmaking() {
     std::cout << "Matchmaking started" << std::endl;
@@ -21,17 +22,27 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
 
             // TODO Flip coin to determine who goes first
             bool playerFirst = false;
-            std::shared_ptr<Chess> t = std::make_shared<Chess>(&conn, opponent, playerFirst);
+
+            gameWriteMutex.lock();
+            std::shared_ptr<Chess> t = std::make_shared<Chess>(&conn, opponent, playerFirst, nextGameId);
+            games[nextGameId] = t;
+            nextGameId++;
+            gameWriteMutex.unlock();
 
             ChessPlayer *playerData = new ChessPlayer(t, playerFirst);
             ChessPlayer *opponentData = new ChessPlayer(t, !playerFirst);
 
-
             opponent->userdata(opponentData);
             conn.userdata(playerData);
 
-            opponent->send_text(playerFirst ? "black" : "white");
-            conn.send_text(playerFirst ? "white" : "black");
+            std::stringstream opponentString;
+            std::stringstream playerString;
+
+            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white");
+            playerString << nextGameId << ":" << (playerFirst ? "white" : "black");
+
+            opponent->send_text(opponentString.str());
+            conn.send_text(playerString.str());
             return;
         }
         inQueueMutex.unlock();
@@ -40,4 +51,12 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
         inQueue.push(&conn);
         inQueueMutex.unlock();
     }
+}
+
+std::shared_ptr<Chess> Matchmaking::getGame(size_t id) {
+    if (id >= games.size()) {
+        return nullptr;
+    }
+
+    return games[id];
 }

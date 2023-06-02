@@ -1,13 +1,15 @@
 #include <crow.h>
 #include <crow/app.h>
+#include <crow/http_response.h>
 #include <crow/websocket.h>
 #include <iostream>
+#include <sstream>
 #include "Chess.h"
 #include "ChessPlayer.h"
 #include "Matchmaking.h"
 
 int main() {
-    Matchmaking matchmaking = Matchmaking();
+    Matchmaking matchmaking;
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([]() {
@@ -34,6 +36,35 @@ int main() {
                     /* bool success = t.performMove(data, true); */
                     conn.send_text(success ? "true" : "false");
                 });
+
+    CROW_ROUTE(app, "/game/<int>/moves/<string>")([&matchmaking](int id, std::string isWhite) {
+        std::shared_ptr<Chess> game = matchmaking.getGame(id);
+        if (!game){
+            return crow::response(404);
+        }
+        bool white = false;
+        if (isWhite == "white") {
+            white = true;
+        }
+
+        std::stringstream board = game->getPieceLocations(white);
+
+        crow::response out(board.str());
+        out.set_header("Content-Type", "application/json");
+        return out;
+    });
+
+    CROW_ROUTE(app, "/game/<int>")([&matchmaking](int id) {
+        std::shared_ptr<Chess> game = matchmaking.getGame(id);
+        if (!game){
+            return crow::response(404);
+        }
+        std::stringstream board = game->getBoardState();
+
+        crow::response out(board.str());
+        out.set_header("Content-Type", "application/json");
+        return out;
+    });
 
     app.port(8000).multithreaded().run();
 }

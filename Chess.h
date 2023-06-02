@@ -3,11 +3,16 @@
 
 #include <atomic>
 #include <crow/websocket.h>
+#include <cstddef>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <sstream>
 #include <string>
 #include <regex>
+#include <unordered_map>
 #include <unordered_set>
+#include <crow.h>
 
 enum Piece {
     WHITE_PAWN = 0,
@@ -42,12 +47,17 @@ struct pair_equal {
 
 class Chess {
 public:
-    Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst);
+    Chess(crow::websocket::connection* whiteConn, crow::websocket::connection* blackConn, bool whiteFirst, size_t id);
     bool performMove(std::string move, bool isWhite);
+
+    std::stringstream getBoardState();
+    std::stringstream getPieceLocations(bool isWhite);
 private:
     std::atomic<bool> isWhiteTurn;
+    std::mutex performMoveMutex;
 
     crow::websocket::connection* connections[2];
+    size_t id;
 
     short board[8][8] = {
         { WHITE_ROOK,   WHITE_KNIGHT,   WHITE_BISHOP,   WHITE_QUEEN,    WHITE_KING,     WHITE_BISHOP,   WHITE_KNIGHT,   WHITE_ROOK },
@@ -59,7 +69,12 @@ private:
         { BLACK_PAWN,   BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN },
         { BLACK_ROOK,   BLACK_KNIGHT,   BLACK_BISHOP,   BLACK_QUEEN,    BLACK_KING,     BLACK_BISHOP,   BLACK_KNIGHT,   BLACK_ROOK },
     };
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> whitePieceLocations;
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> blackPieceLocations;
+
     bool movePossible(std::string pieceName, std::string dest);
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves(short row, short col);
+
+    /* std::string stringFromXY(std::pair<short, short> coords); */
 };
 #endif
