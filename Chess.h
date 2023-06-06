@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <crow.h>
+#include <vector>
 
 enum Piece {
     WHITE_PAWN = 0,
@@ -44,6 +45,7 @@ struct pair_equal {
             return p1.first == p2.first && p1.second == p2.second;
         }
 };
+std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves(unsigned char board[8][8], short row, short col);
 
 class Chess {
 public:
@@ -59,7 +61,7 @@ private:
     crow::websocket::connection* connections[2];
     size_t id;
 
-    short board[8][8] = {
+    unsigned char board[8][8] = {
         { WHITE_ROOK,   WHITE_KNIGHT,   WHITE_BISHOP,   WHITE_QUEEN,    WHITE_KING,     WHITE_BISHOP,   WHITE_KNIGHT,   WHITE_ROOK },
         { WHITE_PAWN,   WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN,     WHITE_PAWN },
         { EMPTY,        EMPTY,          EMPTY,          EMPTY,          EMPTY,          EMPTY,          EMPTY,          EMPTY },
@@ -69,11 +71,26 @@ private:
         { BLACK_PAWN,   BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN,     BLACK_PAWN },
         { BLACK_ROOK,   BLACK_KNIGHT,   BLACK_BISHOP,   BLACK_QUEEN,    BLACK_KING,     BLACK_BISHOP,   BLACK_KNIGHT,   BLACK_ROOK },
     };
+    unsigned char idBoard[8][8] = {
+        { 1,    2,  3,      4,  5,  6,  7,  8 },
+        { 9,    10, 11,     12, 13, 14, 15, 16 },
+        { 0,    0,  0,      0,  0,  0,  0,  0 },
+        { 0,    0,  0,      0,  0,  0,  0,  0 },
+        { 0,    0,  0,      0,  0,  0,  0,  0 },
+        { 0,    0,  0,      0,  0,  0,  0,  0 },
+        { 17,   18, 19,     20, 21, 22, 23, 24 },
+        { 25,   26, 27,     28, 29, 30, 31, 32 },
+    };
+
+    std::vector<unsigned char> potentialBoard[8][8];
+
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> whitePieceLocations;
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> blackPieceLocations;
 
     bool movePossible(std::string pieceName, std::string dest);
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves(short row, short col);
+    void populatePotentailMoves(short row, short col);
+    bool moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite);
+    bool isCheck(unsigned char board[8][8], bool isWhite);
 
     /* std::string stringFromXY(std::pair<short, short> coords); */
 };

@@ -32,14 +32,14 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
             ChessPlayer *playerData = new ChessPlayer(t, playerFirst);
             ChessPlayer *opponentData = new ChessPlayer(t, !playerFirst);
 
-            opponent->userdata(opponentData);
             conn.userdata(playerData);
+            opponent->userdata(opponentData);
 
-            std::stringstream opponentString;
             std::stringstream playerString;
+            std::stringstream opponentString;
 
-            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white");
             playerString << nextGameId << ":" << (playerFirst ? "white" : "black");
+            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white");
 
             opponent->send_text(opponentString.str());
             conn.send_text(playerString.str());
