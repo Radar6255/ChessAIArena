@@ -5,8 +5,11 @@ if len(sys.argv) < 2:
     print("Usage: websocketTest.py <isWhite>")
     sys.exit(1)
 
-isWhite = sys.argv[1] == "white"
+isWhite = False
+if sys.argv[1] == "white" or sys.argv[1] == "true":
+    isWhite = True
 
+websocket.enableTrace(True)
 ws = websocket.WebSocket()
 ws.connect("ws://localhost:8000/ws")
 

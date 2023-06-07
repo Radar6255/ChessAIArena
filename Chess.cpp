@@ -78,8 +78,8 @@ Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection
         for (int y = 0; y < 8; y++) {
             whitePieceLocations.insert(std::make_pair(x, y));
             blackPieceLocations.insert(std::make_pair(7 - x, y));
-            populatePotentailMoves(x, y);
-            populatePotentailMoves(7 - x, y);
+            populatePotentialMoves(x, y);
+            populatePotentialMoves(7 - x, y);
         }
     }
 }
@@ -143,31 +143,27 @@ bool Chess::performMove(std::string move, bool isWhite) {
         return false;
     }
 
-    unsigned char movedPiece = idBoard[startXY.first][startXY.second];
-    unsigned char takenPiece = idBoard[destXY.first][destXY.second];
-    if (!takenPiece) {
-        takenPiece = movedPiece;
-    }
-
     for (int x = 0; x < 8; x++) {
         for (int y = 0; y < 8; y++) {
-            for (auto piece = potentialBoard[x][y].begin(); piece != potentialBoard[x][y].end(); piece++) {
-                if (!(*piece)) {
-                    break;
-                }
-                if (*piece == movedPiece || *piece == takenPiece) {
-                    potentialBoard[x][y].erase(piece);
-                }
-            }
+//            for (auto piece = potentialMoves[x][y].begin(); piece != potentialMoves[x][y].end(); piece++) {
+//                if (!(*piece)) {
+//                    break;
+//                }
+                // if (*piece == startXY || *piece == destXY) {
+                    //potentialMoves[x][y].erase(piece);
+                    potentialMoves[x][y].erase(startXY);
+                    potentialMoves[x][y].erase(destXY);
+                // }
+//            }
         }
     }
 
     // Now we need to perform the move
     // Probably should have a lock here so no one can read the board in a bad state
-    idBoard[destXY.first][destXY.second] = idBoard[startXY.first][startXY.second];
+    // idBoard[destXY.first][destXY.second] = idBoard[startXY.first][startXY.second];
     board[destXY.first][destXY.second] = board[startXY.first][startXY.second];
 
-    idBoard[startXY.first][startXY.second] = 0;
+    // idBoard[startXY.first][startXY.second] = 0;
     board[startXY.first][startXY.second] = EMPTY;
 
     if (isWhite) {
@@ -180,7 +176,7 @@ bool Chess::performMove(std::string move, bool isWhite) {
         blackPieceLocations.insert(destXY);
     }
 
-    this->populatePotentailMoves(destXY.first, destXY.second);
+    this->populatePotentialMoves(destXY.first, destXY.second);
 
     isWhiteTurn = !isWhiteTurn;
     performMoveMutex.unlock();
@@ -250,10 +246,11 @@ std::stringstream Chess::getBoardState() {
     return output;
 }
 
-void Chess::populatePotentailMoves(short row, short col) {
+void Chess::populatePotentialMoves(short row, short col) {
     // First thing we need to do is find which piece it is
     unsigned char piece = board[row][col];
-    unsigned char curPieceId = idBoard[row][col];
+    // unsigned char piecePos = idBoard[row][col];
+    std::pair<short, short> piecePos = {row, col};
 
     bool isWhite = isPieceWhite(piece);
     short forwardDir = isWhite ? 1 : -1;
@@ -263,18 +260,18 @@ void Chess::populatePotentailMoves(short row, short col) {
         case BLACK_PAWN:
             // Seeing if the pawn can move forward one
             if (row + forwardDir >= 0 && row + forwardDir < 8) {
-                potentialBoard[row + forwardDir][col].push_back(curPieceId);
+                potentialMoves[row + forwardDir][col].insert(piecePos);
 
                 // If the pawn is in the starting row see if it can move two spaces forward
                 if ((isWhite && row == 1) || (!isWhite && row == 6)) {
-                    potentialBoard[row + 2 * forwardDir][col].push_back(curPieceId);
+                    potentialMoves[row + 2 * forwardDir][col].insert(piecePos);
                 }
 
                 if (col + 1 < 8) {
-                    potentialBoard[row + forwardDir][col + 1].push_back(curPieceId);
+                    potentialMoves[row + forwardDir][col + 1].insert(piecePos);
                 }
                 if (col - 1 >= 0) {
-                    potentialBoard[row + forwardDir][col - 1].push_back(curPieceId);
+                    potentialMoves[row + forwardDir][col - 1].insert(piecePos);
                 }
             }
             break;
@@ -292,7 +289,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                     }
 
                     if (row + x < 8 && row + x >= 0 && col + y < 8 && col + y >= 0) {
-                        potentialBoard[row + x][col + y].push_back(curPieceId);
+                        potentialMoves[row + x][col + y].insert(piecePos);
                     }
                 }
             }
@@ -303,12 +300,12 @@ void Chess::populatePotentailMoves(short row, short col) {
         case BLACK_ROOK:
             // Starting by checking row movement
             for (int i = 0; i < 8; i++) {
-                potentialBoard[i][col].push_back(curPieceId);
+                potentialMoves[i][col].insert(piecePos);
             }
 
             // Checking column movement
             for (int i = 0; i < 8; i++) {
-                potentialBoard[row][i].push_back(curPieceId);
+                potentialMoves[row][i].insert(piecePos);
             }
 
             // This is so we can have the queeen do both rook and bishop moves
@@ -324,7 +321,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                 if (curX < 0 || curX > 7 || curY < 0 || curY > 7) {
                     break;
                 }
-                potentialBoard[curX][curY].push_back(curPieceId);
+                potentialMoves[curX][curY].insert(piecePos);
 
                 curX++;
                 curY++;
@@ -337,7 +334,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                     break;
                 }
 
-                potentialBoard[curX][curY].push_back(curPieceId);
+                potentialMoves[curX][curY].insert(piecePos);
                 curX--;
                 curY--;
             }
@@ -349,7 +346,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                     break;
                 }
 
-                potentialBoard[curX][curY].push_back(curPieceId);
+                potentialMoves[curX][curY].insert(piecePos);
                 curX--;
                 curY++;
             }
@@ -361,7 +358,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                     break;
                 }
 
-                potentialBoard[curX][curY].push_back(curPieceId);
+                potentialMoves[curX][curY].insert(piecePos);
                 curX++;
                 curY--;
             }
@@ -376,7 +373,7 @@ void Chess::populatePotentailMoves(short row, short col) {
                     }
 
                     if (row + tx < 8 && row + tx >= 0 && col + ty < 8 && col + ty >= 0) {
-                        potentialBoard[row + tx][col + ty].push_back(curPieceId);
+                        potentialMoves[row + tx][col + ty].insert(piecePos);
                     }
                 }
             }
@@ -414,19 +411,13 @@ bool Chess::moveCreatesCheck(unsigned char board[8][8], short row, short col, bo
     /* } */
 
     // Need to find which pieces to check
-    std::vector<unsigned char> checkPieces = potentialBoard[row][col];
-    for (unsigned char piece: checkPieces) {
-        // TODO Find if the piece that we are looking up is the current players piece or not
-        // Have the piece id, now need to find it's current location
-        for (int x = 0; x < 8; x++) {
-            for (int y = 0; y < 8; y++) {
-                if (std::find(checkPieces.begin(), checkPieces.end(), idBoard[x][y]) != checkPieces.end()) {
-                    // We are at the location of one of the pieces
-                    auto moves = getPieceMoves(board, x, y);
-                    if (moves.count(kingPos) > 0) {
-                        return true;
-                    }
-                }
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> checkPieces = potentialMoves[row][col];
+    for (std::pair<short, short> piece: checkPieces) {
+        // Checking to see if the piece is the opponents since the players own piece can't put them in check
+        if (isPieceWhite(board[piece.first][piece.second] != isWhite)) {
+            auto moves = getPieceMoves(board, piece.first, piece.second);
+            if (moves.count(kingPos) > 0) {
+                return true;
             }
         }
     }

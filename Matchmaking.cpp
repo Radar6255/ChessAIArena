@@ -38,8 +38,8 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
             std::stringstream playerString;
             std::stringstream opponentString;
 
-            playerString << nextGameId << ":" << (playerFirst ? "white" : "black");
-            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white");
+            playerString << nextGameId << ":" << (playerFirst ? "white" : "black") << std::endl;
+            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white") << std::endl;
 
             opponent->send_text(opponentString.str());
             conn.send_text(playerString.str());
