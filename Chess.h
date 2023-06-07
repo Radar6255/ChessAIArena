@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <crow.h>
+#include <utility>
 #include <vector>
 
 enum Piece {
@@ -76,9 +77,13 @@ private:
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> whitePieceLocations;
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> blackPieceLocations;
 
+    std::unordered_map<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>, pair_hash, pair_equal> whiteMoves;
+    std::unordered_map<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>, pair_hash, pair_equal> blackMoves;
+
     bool movePossible(std::string pieceName, std::string dest);
     void populatePotentialMoves(short row, short col);
     bool moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite);
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getValidMoves(unsigned char x, unsigned char y);
     bool isCheck(unsigned char board[8][8], bool isWhite);
 
     /* std::string stringFromXY(std::pair<short, short> coords); */

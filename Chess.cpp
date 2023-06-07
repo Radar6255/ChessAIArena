@@ -82,6 +82,12 @@ Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection
             populatePotentialMoves(7 - x, y);
         }
     }
+    for (int x = 0; x < 2; x++) {
+        for (int y = 0; y < 8; y++) {
+            whiteMoves.insert(std::make_pair(std::make_pair(x, y), getValidMoves(x, y)));
+            blackMoves.insert(std::make_pair(std::make_pair(7 - x, y), getValidMoves(7 - x, y)));
+        }
+    }
 }
 
 bool Chess::performMove(std::string move, bool isWhite) {
@@ -102,35 +108,44 @@ bool Chess::performMove(std::string move, bool isWhite) {
         return false;
     }
 
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = getPieceMoves(board, startXY.first, startXY.second);
+//    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = getPieceMoves(board, startXY.first, startXY.second);
+    std::unordered_map<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>, pair_hash, pair_equal>* possibleMoves = isWhite ? &whiteMoves : &blackMoves;
+    if (!possibleMoves->count(startXY)) {
+        return false;
+    }
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = possibleMoves->at(startXY);
 
     // The second element is the destination
     std::string dest = sm[2].str();
     std::pair<short, short> destXY = convertToXY(dest);
 
-    bool isValid = moves.count(destXY);
-    if (!isValid) {
+    if (!moves.count(destXY)) {
         return false;
     }
 
+//    bool isValid = moves.count(destXY);
+//    if (!isValid) {
+//        return false;
+//    }
+
     // Here we are going to check for check
-    unsigned char tmpBoard[8][8];
-    std::memcpy(tmpBoard, board, sizeof(board));
+//    unsigned char tmpBoard[8][8];
+//    std::memcpy(tmpBoard, board, sizeof(board));
     // Now we need to perform the move
     // Probably should have a lock here so no one can read the board in a bad state
-    tmpBoard[destXY.first][destXY.second] = tmpBoard[startXY.first][startXY.second];
-    tmpBoard[startXY.first][startXY.second] = EMPTY;
+//    tmpBoard[destXY.first][destXY.second] = tmpBoard[startXY.first][startXY.second];
+//    tmpBoard[startXY.first][startXY.second] = EMPTY;
 
 
-    if (tmpBoard[destXY.first][destXY.second] == WHITE_KING || tmpBoard[destXY.first][destXY.second] == BLACK_KING) {
-        if (moveCreatesCheck(tmpBoard, destXY.first, destXY.second, isWhiteTurn)) {
-            return false;
-        }
-    } else {
-        if (moveCreatesCheck(tmpBoard, startXY.first, startXY.second, isWhiteTurn)) {
-            return false;
-        }
-    }
+//    if (tmpBoard[destXY.first][destXY.second] == WHITE_KING || tmpBoard[destXY.first][destXY.second] == BLACK_KING) {
+//        if (moveCreatesCheck(tmpBoard, destXY.first, destXY.second, isWhiteTurn)) {
+//            return false;
+//        }
+//    } else {
+//        if (moveCreatesCheck(tmpBoard, startXY.first, startXY.second, isWhiteTurn)) {
+//            return false;
+//        }
+//    }
 
     /* if (isCheck(tmpBoard, isWhiteTurn)) { */
     /*     return false; */
@@ -145,16 +160,8 @@ bool Chess::performMove(std::string move, bool isWhite) {
 
     for (int x = 0; x < 8; x++) {
         for (int y = 0; y < 8; y++) {
-//            for (auto piece = potentialMoves[x][y].begin(); piece != potentialMoves[x][y].end(); piece++) {
-//                if (!(*piece)) {
-//                    break;
-//                }
-                // if (*piece == startXY || *piece == destXY) {
-                    //potentialMoves[x][y].erase(piece);
-                    potentialMoves[x][y].erase(startXY);
-                    potentialMoves[x][y].erase(destXY);
-                // }
-//            }
+            potentialMoves[x][y].erase(startXY);
+            potentialMoves[x][y].erase(destXY);
         }
     }
 
@@ -167,10 +174,16 @@ bool Chess::performMove(std::string move, bool isWhite) {
     board[startXY.first][startXY.second] = EMPTY;
 
     if (isWhite) {
+        whiteMoves.erase(startXY);
+        whiteMoves.insert(std::make_pair(destXY, getValidMoves(destXY.first, destXY.second)));
+        // TODO Here is where I want to get all of the pieces that will be affected by this move, src and dest
         whitePieceLocations.erase(startXY);
         blackPieceLocations.erase(destXY);
         whitePieceLocations.insert(destXY);
     } else {
+        blackMoves.erase(startXY);
+        blackMoves.insert(std::make_pair(destXY, getValidMoves(destXY.first, destXY.second)));
+        // TODO Here is where I want to get all of the pieces that will be affected by this move, src and dest
         blackPieceLocations.erase(startXY);
         whitePieceLocations.erase(destXY);
         blackPieceLocations.insert(destXY);
@@ -221,6 +234,24 @@ std::stringstream Chess::getPieceLocations(bool isWhite) {
     output << "]";
 
     return output;
+}
+
+std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> Chess::getValidMoves(unsigned char x, unsigned char y) {
+    // First we get all of the moves
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = getPieceMoves(board, x, y);
+
+    for (std::pair<short, short> move : moves) {
+        unsigned char tmpBoard[8][8];
+        std::memcpy(tmpBoard, board, sizeof(board));
+
+        tmpBoard[move.first][move.second] = tmpBoard[x][y];
+
+        if (moveCreatesCheck(tmpBoard, x, y, isPieceWhite(board[x][y]))) {
+            moves.erase(move);
+        }
+    }
+
+    return moves;
 }
 
 std::stringstream Chess::getBoardState() {
