@@ -23,15 +23,19 @@ gameId = 0
 
 def getAllMoves():
     resp = requests.get(f"http://localhost:8000/game/{gameId}/moves/{'white' if isWhite else 'black'}/list")
-    print(resp.text)
+    # print(resp.text)
     return resp.json()
 
-gameId = ws.recv()[0]
+gameStartStr = ws.recv()
+
+gameId = int(gameStartStr.split(":")[0])
+isWhite = gameStartStr.split(":")[1].strip() == "white"
 gameId = 0
 if not isWhite:
     print(ws.recv())
 
 while True:
-    makeMove(getAllMoves()[random.randint(0, len(getAllMoves())-1)])
+    moves = getAllMoves()
+    makeMove(moves[random.randint(0, len(moves) - 1)])
 
 ws.close()

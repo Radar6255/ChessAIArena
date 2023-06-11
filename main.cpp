@@ -33,8 +33,10 @@ int main() {
                     ChessPlayer *playerData = static_cast<ChessPlayer*>(conn.userdata());
 
                     bool success = playerData->performMove(data);
-                    /* bool success = t.performMove(data, true); */
-                    conn.send_text(success ? "true" : "false");
+                    if (!success) {
+                        conn.send_text("false");
+                    }
+                    /* conn.send_text(success ? "true" : "false"); */
                 });
 
     CROW_ROUTE(app, "/game/<int>/moves/<string>/list")([&matchmaking](int id, std::string isWhite) {

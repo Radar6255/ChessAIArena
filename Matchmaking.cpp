@@ -24,6 +24,7 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
             bool playerFirst = false;
 
             gameWriteMutex.lock();
+            size_t curGameId = nextGameId;
             std::shared_ptr<Chess> t = std::make_shared<Chess>(&conn, opponent, playerFirst, nextGameId);
             games[nextGameId] = t;
             nextGameId++;
@@ -38,8 +39,8 @@ void Matchmaking::matchmake(crow::websocket::connection& conn) {
             std::stringstream playerString;
             std::stringstream opponentString;
 
-            playerString << nextGameId << ":" << (playerFirst ? "white" : "black") << std::endl;
-            opponentString << nextGameId << ":" << (playerFirst ? "black" : "white") << std::endl;
+            playerString << curGameId << ":" << (playerFirst ? "white" : "black") << std::endl;
+            opponentString << curGameId << ":" << (playerFirst ? "black" : "white") << std::endl;
 
             opponent->send_text(opponentString.str());
             conn.send_text(playerString.str());

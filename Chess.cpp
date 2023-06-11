@@ -229,8 +229,10 @@ bool Chess::performMove(std::string move, bool isWhite) {
 
     /* connections[isWhiteTurn]->send_text(moveString.str()); */
     if (isWhiteTurn) {
+        connections[1]->send_text("true");
         connections[0]->send_text(move);
     } else {
+        connections[0]->send_text("true");
         connections[1]->send_text(move);
     }
 
@@ -716,14 +718,18 @@ std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves
                 }
 
                 // Now we need to check diagonals
-                short diagRight = board[row + forwardDir][col + 1];
-                if (diagRight != EMPTY && isWhite != isPieceWhite(diagRight)) {
-                    out.insert({row + forwardDir, col + 1});
+                if (col + 1 < 8) {
+                    short diagRight = board[row + forwardDir][col + 1];
+                    if (diagRight != EMPTY && isWhite != isPieceWhite(diagRight)) {
+                        out.insert({row + forwardDir, col + 1});
+                    }
                 }
 
-                short diagLeft = board[row + forwardDir][col - 1];
-                if (diagLeft != EMPTY && isWhite != isPieceWhite(diagLeft)) {
-                    out.insert({row + forwardDir, col - 1});
+                if (col - 1 >= 0) {
+                    short diagLeft = board[row + forwardDir][col - 1];
+                    if (diagLeft != EMPTY && isWhite != isPieceWhite(diagLeft)) {
+                        out.insert({row + forwardDir, col - 1});
+                    }
                 }
             }
             // TODO Handle promoting here potentially
@@ -895,6 +901,10 @@ std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves
             for (int tx = 0; tx < 2; tx++) {
                 for (int ty = 0; ty < 2; ty++) {
                     if (tx == 1 && ty == 1) {
+                        continue;
+                    }
+
+                    if (row + tx > 7 || row + tx < 0 || col + ty > 7 || col + ty < 0) {
                         continue;
                     }
 
