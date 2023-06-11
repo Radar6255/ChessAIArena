@@ -2,6 +2,7 @@
 #include <crow/websocket.h>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <ostream>
 #include <sstream>
@@ -91,6 +92,7 @@ Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection
 }
 
 bool Chess::performMove(std::string move, bool isWhite) {
+    std::cout << "Performing move: " << move << std::endl;
     if (isWhiteTurn != isWhite) {
         return false;
     }
@@ -189,7 +191,34 @@ bool Chess::performMove(std::string move, bool isWhite) {
         blackPieceLocations.insert(destXY);
     }
 
+    // Creating a vector of all the pieces that will be affected
+    std::vector<std::pair<short, short>> affectedPiecesT;
+    std::vector<std::pair<short, short>> affectedPieces;
+
+    // Constructed by finding the pieces that will be affected by the source and destination changing
+    auto srcPieces = potentialMoves[startXY.first][startXY.second];
+    auto dstPieces = potentialMoves[destXY.first][destXY.second];
+
     this->populatePotentialMoves(destXY.first, destXY.second);
+
+    std::set_union(srcPieces.begin(), srcPieces.end(), dstPieces.begin(), dstPieces.end(), std::inserter(affectedPiecesT, affectedPiecesT.end()));
+
+    std::vector<std::pair<short, short>> attackedPieces = getAttackedPieces(board, destXY.first, destXY.second);
+    std::set_union(affectedPiecesT.begin(), affectedPiecesT.end(), attackedPieces.begin(), attackedPieces.end(), std::inserter(affectedPieces, affectedPieces.end()));
+
+    if (move == "d8a5") {
+        std::cout << "d8a5" << std::endl;
+    }
+
+    for (auto piece : affectedPieces) {
+        if (isPieceWhite(board[piece.first][piece.second])) {
+            whiteMoves.erase(piece);
+            whiteMoves.insert(std::make_pair(piece, getValidMoves(piece.first, piece.second)));
+        } else {
+            blackMoves.erase(piece);
+            blackMoves.insert(std::make_pair(piece, getValidMoves(piece.first, piece.second)));
+        }
+    }
 
     isWhiteTurn = !isWhiteTurn;
     performMoveMutex.unlock();
@@ -217,19 +246,60 @@ std::string stringFromXY(std::pair<short, short> coords) {
 std::stringstream Chess::getPieceLocations(bool isWhite) {
     std::stringstream output;
 
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> *pieceLocations = isWhite ? &whitePieceLocations : &blackPieceLocations;
+    auto *pieceLocations = isWhite ? &whiteMoves : &blackMoves;
 
     bool first = true;
 
     output << "[";
-    for (auto it = pieceLocations->begin(); it != pieceLocations->end(); it++) {
+    for (auto pieceMoves = pieceLocations->begin(); pieceMoves != pieceLocations->end(); pieceMoves++) {
         if (first) {
             first = false;
         } else {
             output << ",";
         }
 
-        output << "\"" << stringFromXY(*it) << "\"";
+        output << "{\"piece\": \"" << pieceToString(board[pieceMoves->first.first][pieceMoves->first.second]) << "\", \"location\": \"" << stringFromXY(pieceMoves->first) << "\", \"moves\": [";
+
+        bool firstMove = true;
+        // Here is where I want to get the valid moves for the current piece
+        for (auto move: pieceMoves->second) {
+            if (firstMove) {
+                firstMove = false;
+            } else {
+                output << ",";
+            }
+            output << "\"" << stringFromXY(pieceMoves->first) << stringFromXY(move) << "\"";
+        }
+        output << "]}";
+    }
+    output << "]";
+
+    return output;
+}
+
+std::stringstream Chess::getPieceLocationsList(bool isWhite) {
+    std::stringstream output;
+
+    auto *pieceLocations = isWhite ? &whiteMoves : &blackMoves;
+
+    bool first = true;
+
+    output << "[";
+    for (auto pieceMoves = pieceLocations->begin(); pieceMoves != pieceLocations->end(); pieceMoves++) {
+        if (pieceMoves->second.size() == 0) {
+            continue;
+        }
+
+        // Here is where I want to get the valid moves for the current piece
+        for (auto move: pieceMoves->second) {
+            if (first) {
+                first = false;
+            } else {
+                output << ",";
+            }
+
+            output << "\"" << stringFromXY(pieceMoves->first) << stringFromXY(move) << "\"";
+        }
     }
     output << "]";
 
@@ -239,16 +309,26 @@ std::stringstream Chess::getPieceLocations(bool isWhite) {
 std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> Chess::getValidMoves(unsigned char x, unsigned char y) {
     // First we get all of the moves
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> moves = getPieceMoves(board, x, y);
+    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> invalidMoves;
 
     for (std::pair<short, short> move : moves) {
+        // TODO This can be made more efficient
         unsigned char tmpBoard[8][8];
         std::memcpy(tmpBoard, board, sizeof(board));
 
         tmpBoard[move.first][move.second] = tmpBoard[x][y];
+        tmpBoard[x][y] = EMPTY;
 
         if (moveCreatesCheck(tmpBoard, x, y, isPieceWhite(board[x][y]))) {
-            moves.erase(move);
+            std::cout << "INVALID: " << move.first << " " << move.second << " " << x << " " << y << std::endl;
+            invalidMoves.insert(move);
+        } else {
+            /* std::cout << "VALID: " << move.first << " " << move.second << " " << x << " " << y << std::endl; */
         }
+    }
+
+    for (std::pair<short, short> move : invalidMoves) {
+        moves.erase(move);
     }
 
     return moves;
@@ -275,6 +355,156 @@ std::stringstream Chess::getBoardState() {
     output << "]";
 
     return output;
+}
+
+std::vector<std::pair<short, short>> Chess::getAttackedPieces(unsigned char board[8][8], short row, short col) {
+    std::vector<std::pair<short, short>> out;
+    unsigned char piece = board[row][col];
+
+    bool isWhite = isPieceWhite(piece);
+
+    switch (piece) {
+        case WHITE_QUEEN:
+        case BLACK_QUEEN:
+        case WHITE_ROOK:
+        case BLACK_ROOK:
+            // Starting by checking row movement going up
+            for (int i = row + 1; i < 8; i++) {
+                short curPiece = board[i][col];
+                if (curPiece != EMPTY && isPieceWhite(curPiece) != isWhite) {
+                    out.push_back({i, col});
+                    break;
+                }
+
+                if (curPiece != EMPTY) {
+                    break;
+                }
+            }
+
+            // Checking row movement going down
+            for (int i = row - 1; i >= 0; i--) {
+                short curPiece = board[i][col];
+                if (curPiece != EMPTY && isPieceWhite(curPiece) != isWhite) {
+                    out.push_back({i, col});
+                    break;
+                }
+
+                if (curPiece != EMPTY) {
+                    break;
+                }
+            }
+
+            // Checking column movement going right
+            for (int i = col + 1; i < 8; i++) {
+                short curPiece = board[row][i];
+                if (curPiece != EMPTY && isPieceWhite(curPiece) != isWhite) {
+                    out.push_back({row, i});
+                    break;
+                }
+
+                if (curPiece != EMPTY) {
+                    break;
+                }
+            }
+
+            // Checking column movement going left
+            for (int i = col - 1; i >= 0; i--) {
+                short curPiece = board[row][i];
+                if (curPiece != EMPTY && isPieceWhite(curPiece) != isWhite) {
+                    out.push_back({row, i});
+                    break;
+                }
+
+                if (curPiece != EMPTY) {
+                    break;
+                }
+            }
+
+            // This is so we can have the queeen do both rook and bishop moves
+            if (piece != WHITE_QUEEN && piece != BLACK_QUEEN) {
+                break;
+            }
+        case WHITE_BISHOP:
+        case BLACK_BISHOP: {
+            // Looping in the right up direction first
+            short curX = row + 1;
+            short curY = col + 1;
+            while(true) {
+                if (curX < 0 || curX > 7 || curY < 0 || curY > 7) {
+                    break;
+                }
+
+                if (board[curX][curY] != EMPTY && isWhite != isPieceWhite(board[curX][curY])) {
+                    out.push_back({curX, curY});
+                    break;
+                }
+                if (board[curX][curY] != EMPTY) {
+                    break;
+                }
+                curX++;
+                curY++;
+            }
+
+            curX = row - 1;
+            curY = col - 1;
+            while(true) {
+                if (curX < 0 || curX > 7 || curY < 0 || curY > 7) {
+                    break;
+                }
+
+                if (board[curX][curY] != EMPTY && isWhite != isPieceWhite(board[curX][curY])) {
+                    out.push_back({curX, curY});
+                    break;
+                }
+                if (board[curX][curY] != EMPTY) {
+                    break;
+                }
+
+                curX--;
+                curY--;
+            }
+
+            curX = row - 1;
+            curY = col + 1;
+            while(true) {
+                if (curX < 0 || curX > 7 || curY < 0 || curY > 7) {
+                    break;
+                }
+
+                if (board[curX][curY] != EMPTY && isWhite != isPieceWhite(board[curX][curY])) {
+                    out.push_back({curX, curY});
+                    break;
+                }
+                if (board[curX][curY] != EMPTY) {
+                    break;
+                }
+                curX--;
+                curY++;
+            }
+
+            curX = row + 1;
+            curY = col - 1;
+            while(true) {
+                if (curX < 0 || curX > 7 || curY < 0 || curY > 7) {
+                    break;
+                }
+
+                if (board[curX][curY] != EMPTY && isWhite != isPieceWhite(board[curX][curY])) {
+                    out.push_back({curX, curY});
+                    break;
+                }
+                if (board[curX][curY] != EMPTY) {
+                    break;
+                }
+                curX++;
+                curY--;
+            }
+            break;
+        }
+
+    }
+
+    return out;
 }
 
 void Chess::populatePotentialMoves(short row, short col) {
@@ -428,24 +658,14 @@ std::pair<short, short> getKingPos(unsigned char board[8][8], bool isWhite) {
 }
 
 bool Chess::moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite) {
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> pieceLocations = isWhite ? whitePieceLocations : blackPieceLocations;
-
     std::pair<short, short> kingPos;
     kingPos = getKingPos(board, isWhite);
-
-    /* for (auto it = pieceLocations.begin(); it != pieceLocations.end(); it++) { */
-    /*     unsigned short piece = board[it->first][it->second]; */
-    /*     if (piece == WHITE_KING || piece == BLACK_KING) { */
-    /*         kingPos = *it; */
-    /*         break; */
-    /*     } */
-    /* } */
 
     // Need to find which pieces to check
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> checkPieces = potentialMoves[row][col];
     for (std::pair<short, short> piece: checkPieces) {
         // Checking to see if the piece is the opponents since the players own piece can't put them in check
-        if (isPieceWhite(board[piece.first][piece.second] != isWhite)) {
+        if (isPieceWhite(board[piece.first][piece.second]) != isWhite) {
             auto moves = getPieceMoves(board, piece.first, piece.second);
             if (moves.count(kingPos) > 0) {
                 return true;

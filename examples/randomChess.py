@@ -1,5 +1,7 @@
 import websocket
+import requests
 import sys
+import random
 
 if len(sys.argv) < 2:
     print("Usage: websocketTest.py <isWhite>")
@@ -17,33 +19,19 @@ def makeMove(move):
     ws.send(move)
     print(move+": "+ws.recv())
 
-if isWhite:
+gameId = 0
+
+def getAllMoves():
+    resp = requests.get(f"http://localhost:8000/game/{gameId}/moves/{'white' if isWhite else 'black'}/list")
+    print(resp.text)
+    return resp.json()
+
+gameId = ws.recv()[0]
+gameId = 0
+if not isWhite:
     print(ws.recv())
 
-    makeMove("b1a3")
-    print(ws.recv())
-
-    makeMove("c2c4")
-    print(ws.recv())
-
-    makeMove("d2d3")
-    makeMove("e2e4")
-    print(ws.recv())
-
-    makeMove("e1e2")
-    print(ws.recv())
-else:
-    print(ws.recv())
-    print(ws.recv())
-    makeMove("c7c5")
-    print(ws.recv())
-
-    makeMove("d8a5")
-    print(ws.recv())
-
-    makeMove("a5a6")
-    print(ws.recv())
-
-
+while True:
+    makeMove(getAllMoves()[random.randint(0, len(getAllMoves())-1)])
 
 ws.close()

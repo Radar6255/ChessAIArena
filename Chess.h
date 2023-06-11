@@ -55,6 +55,7 @@ public:
 
     std::stringstream getBoardState();
     std::stringstream getPieceLocations(bool isWhite);
+    std::stringstream getPieceLocationsList(bool isWhite);
 private:
     std::atomic<bool> isWhiteTurn;
     std::mutex performMoveMutex;
@@ -85,6 +86,7 @@ private:
     bool moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite);
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getValidMoves(unsigned char x, unsigned char y);
     bool isCheck(unsigned char board[8][8], bool isWhite);
+    std::vector<std::pair<short, short>> getAttackedPieces(unsigned char board[8][8], short row, short col);
 
     /* std::string stringFromXY(std::pair<short, short> coords); */
 };

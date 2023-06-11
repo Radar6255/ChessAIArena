@@ -37,6 +37,23 @@ int main() {
                     conn.send_text(success ? "true" : "false");
                 });
 
+    CROW_ROUTE(app, "/game/<int>/moves/<string>/list")([&matchmaking](int id, std::string isWhite) {
+        std::shared_ptr<Chess> game = matchmaking.getGame(id);
+        if (!game){
+            return crow::response(404);
+        }
+        bool white = false;
+        if (isWhite == "white") {
+            white = true;
+        }
+
+        std::stringstream board = game->getPieceLocationsList(white);
+
+        crow::response out(board.str());
+        out.set_header("Content-Type", "application/json");
+        return out;
+    });
+
     CROW_ROUTE(app, "/game/<int>/moves/<string>")([&matchmaking](int id, std::string isWhite) {
         std::shared_ptr<Chess> game = matchmaking.getGame(id);
         if (!game){
