@@ -47,6 +47,7 @@ struct pair_equal {
         }
 };
 std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getPieceMoves(unsigned char board[8][8], short row, short col);
+std::pair<short, short> getKingPos(unsigned char board[8][8], bool isWhite);
 
 class Chess {
 public:
@@ -54,11 +55,15 @@ public:
     bool performMove(std::string move, bool isWhite);
 
     std::stringstream getBoardState();
+    std::stringstream getBoardStateBasic();
     std::stringstream getPieceLocations(bool isWhite);
     std::stringstream getPieceLocationsList(bool isWhite);
 private:
     std::atomic<bool> isWhiteTurn;
     std::mutex performMoveMutex;
+
+    bool isWhiteInCheck;
+    bool isBlackInCheck;
 
     crow::websocket::connection* connections[2];
     size_t id;
@@ -75,8 +80,8 @@ private:
     };
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> potentialMoves[8][8];
 
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> whitePieceLocations;
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> blackPieceLocations;
+    /* std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> whitePieceLocations; */
+    /* std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> blackPieceLocations; */
 
     std::unordered_map<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>, pair_hash, pair_equal> whiteMoves;
     std::unordered_map<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>, pair_hash, pair_equal> blackMoves;
@@ -84,6 +89,7 @@ private:
     bool movePossible(std::string pieceName, std::string dest);
     void populatePotentialMoves(short row, short col);
     bool moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite);
+    bool naiveCheck(unsigned char board[8][8], short row, short col, bool isWhite);
     std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> getValidMoves(unsigned char x, unsigned char y);
     bool isCheck(unsigned char board[8][8], bool isWhite);
     std::vector<std::pair<short, short>> getAttackedPieces(unsigned char board[8][8], short row, short col);

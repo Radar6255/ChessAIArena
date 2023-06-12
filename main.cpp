@@ -73,6 +73,18 @@ int main() {
         return out;
     });
 
+    CROW_ROUTE(app, "/game/<int>/basic")([&matchmaking](int id) {
+        std::shared_ptr<Chess> game = matchmaking.getGame(id);
+        if (!game){
+            return crow::response(404);
+        }
+        std::stringstream board = game->getBoardStateBasic();
+
+        crow::response out(board.str());
+        out.set_header("Content-Type", "text/plain");
+        return out;
+    });
+
     CROW_ROUTE(app, "/game/<int>")([&matchmaking](int id) {
         std::shared_ptr<Chess> game = matchmaking.getGame(id);
         if (!game){

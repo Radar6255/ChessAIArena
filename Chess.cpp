@@ -77,8 +77,8 @@ Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection
     // Now we need to setup each players piece locations
     for (int x = 0; x < 2; x++) {
         for (int y = 0; y < 8; y++) {
-            whitePieceLocations.insert(std::make_pair(x, y));
-            blackPieceLocations.insert(std::make_pair(7 - x, y));
+            /* whitePieceLocations.insert(std::make_pair(x, y)); */
+            /* blackPieceLocations.insert(std::make_pair(7 - x, y)); */
             populatePotentialMoves(x, y);
             populatePotentialMoves(7 - x, y);
         }
@@ -167,6 +167,9 @@ bool Chess::performMove(std::string move, bool isWhite) {
         }
     }
 
+    unsigned char tmpBoard[8][8];
+    std::memcpy(tmpBoard, board, sizeof(board));
+
     // Now we need to perform the move
     // Probably should have a lock here so no one can read the board in a bad state
     // idBoard[destXY.first][destXY.second] = idBoard[startXY.first][startXY.second];
@@ -175,20 +178,30 @@ bool Chess::performMove(std::string move, bool isWhite) {
     // idBoard[startXY.first][startXY.second] = 0;
     board[startXY.first][startXY.second] = EMPTY;
 
+    // Here we are finding the moves that the current player did put the opponent into check
+    isBlackInCheck = false;
+    isWhiteInCheck = false;
+    bool opponentInCheck = false;
+    std::pair<short, short> kingPos = getKingPos(board, !isWhiteTurn);
+    auto movedPieceMoves = getValidMoves(destXY.first, destXY.second);
+
     if (isWhite) {
         whiteMoves.erase(startXY);
-        whiteMoves.insert(std::make_pair(destXY, getValidMoves(destXY.first, destXY.second)));
-        // TODO Here is where I want to get all of the pieces that will be affected by this move, src and dest
-        whitePieceLocations.erase(startXY);
-        blackPieceLocations.erase(destXY);
-        whitePieceLocations.insert(destXY);
+        blackMoves.erase(destXY);
+        whiteMoves.insert(std::make_pair(destXY, movedPieceMoves));
+
+        if (movedPieceMoves.count(kingPos)) {
+            isBlackInCheck = true;
+            opponentInCheck = true;
+        }
     } else {
         blackMoves.erase(startXY);
-        blackMoves.insert(std::make_pair(destXY, getValidMoves(destXY.first, destXY.second)));
-        // TODO Here is where I want to get all of the pieces that will be affected by this move, src and dest
-        blackPieceLocations.erase(startXY);
-        whitePieceLocations.erase(destXY);
-        blackPieceLocations.insert(destXY);
+        whiteMoves.erase(destXY);
+        blackMoves.insert(std::make_pair(destXY, movedPieceMoves));
+        if (movedPieceMoves.count(kingPos)) {
+            isWhiteInCheck = true;
+            opponentInCheck = true;
+        }
     }
 
     // Creating a vector of all the pieces that will be affected
@@ -199,11 +212,17 @@ bool Chess::performMove(std::string move, bool isWhite) {
     auto srcPieces = potentialMoves[startXY.first][startXY.second];
     auto dstPieces = potentialMoves[destXY.first][destXY.second];
 
+    std::vector<std::pair<short, short>> attackedPiecesSrc = getAttackedPieces(tmpBoard, startXY.first, startXY.second);
+
     this->populatePotentialMoves(destXY.first, destXY.second);
 
     std::set_union(srcPieces.begin(), srcPieces.end(), dstPieces.begin(), dstPieces.end(), std::inserter(affectedPiecesT, affectedPiecesT.end()));
 
-    std::vector<std::pair<short, short>> attackedPieces = getAttackedPieces(board, destXY.first, destXY.second);
+    std::vector<std::pair<short, short>> attackedPiecesDst = getAttackedPieces(board, destXY.first, destXY.second);
+
+    std::vector<std::pair<short, short>> attackedPieces;
+    std::set_union(attackedPiecesDst.begin(), attackedPiecesDst.end(), attackedPiecesSrc.begin(), attackedPiecesSrc.end(), std::inserter(attackedPieces, attackedPieces.end()));
+
     std::set_union(affectedPiecesT.begin(), affectedPiecesT.end(), attackedPieces.begin(), attackedPieces.end(), std::inserter(affectedPieces, affectedPieces.end()));
 
     if (move == "d8a5") {
@@ -211,13 +230,50 @@ bool Chess::performMove(std::string move, bool isWhite) {
     }
 
     for (auto piece : affectedPieces) {
+        auto newMoves = getValidMoves(piece.first, piece.second);
+
         if (isPieceWhite(board[piece.first][piece.second])) {
             whiteMoves.erase(piece);
-            whiteMoves.insert(std::make_pair(piece, getValidMoves(piece.first, piece.second)));
+            whiteMoves.insert(std::make_pair(piece, newMoves));
+
+            if (!isWhiteTurn) {
+                if (newMoves.count(kingPos)) {
+                    // This means that the opponent's king is in check
+                    opponentInCheck = true;
+                    isBlackInCheck = true;
+                }
+            }
         } else {
             blackMoves.erase(piece);
-            blackMoves.insert(std::make_pair(piece, getValidMoves(piece.first, piece.second)));
+            blackMoves.insert(std::make_pair(piece, newMoves));
+
+            if (isWhiteTurn) {
+                if (newMoves.count(kingPos)) {
+                    // This means that the opponent's king is in check
+                    opponentInCheck = true;
+                    isWhiteInCheck = true;
+                }
+            }
         }
+    }
+
+    if (opponentInCheck) {
+        auto opponentMoves = isWhiteTurn ? blackMoves : whiteMoves;
+
+        std::for_each(opponentMoves.begin(), opponentMoves.end(), [this](auto &move){
+            std::cout << "Updating " << move.first.first << " " << move.first.second << std::endl;
+            move.second = getValidMoves(move.first.first, move.first.second);
+        });
+        /* for (std::pair<std::pair<short, short>, std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>> move : opponentMoves) { */
+        /*     std::cout << "Updating " << move.first.first << " " << move.first.second << std::endl; */
+            /* opponentMoves->erase(move.first); */
+            /* opponentMoves->insert(std::make_pair(move.first, getValidMoves(move.first.first, move.first.second))); */
+        /*     move.second = getValidMoves(move.first.first, move.first.second); */
+        /* } */
+
+        std::cout << "Updated all opponent moves" << std::endl;
+
+        whiteMoves = opponentMoves;
     }
 
     isWhiteTurn = !isWhiteTurn;
@@ -322,7 +378,7 @@ std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> Chess::getVal
         tmpBoard[x][y] = EMPTY;
 
         if (moveCreatesCheck(tmpBoard, x, y, isPieceWhite(board[x][y]))) {
-            std::cout << "INVALID: " << move.first << " " << move.second << " " << x << " " << y << std::endl;
+            std::cout << "INVALID: " << (int)x << " " << (int)y << " " << move.first << " " << move.second << std::endl;
             invalidMoves.insert(move);
         } else {
             /* std::cout << "VALID: " << move.first << " " << move.second << " " << x << " " << y << std::endl; */
@@ -355,6 +411,26 @@ std::stringstream Chess::getBoardState() {
         output << "]";
     }
     output << "]";
+
+    return output;
+}
+std::stringstream Chess::getBoardStateBasic() {
+    std::stringstream output;
+
+    for (int x = 7; x >= 0; x--) {
+        for (int y = 0; y < 8; y++) {
+            if (y != 0) {
+                output << "|";
+            }
+
+            if (board[x][y] == EMPTY) {
+                output << "  ";
+            } else {
+                output << pieceToString(board[x][y]);
+            }
+        }
+        output << "\n";
+    }
 
     return output;
 }
@@ -660,6 +736,12 @@ std::pair<short, short> getKingPos(unsigned char board[8][8], bool isWhite) {
 }
 
 bool Chess::moveCreatesCheck(unsigned char board[8][8], short row, short col, bool isWhite) {
+    if (isWhite && isWhiteInCheck) {
+        return naiveCheck(board, row, col, isWhite);
+    } else if (!isWhite && isBlackInCheck) {
+        return naiveCheck(board, row, col, isWhite);
+    }
+
     std::pair<short, short> kingPos;
     kingPos = getKingPos(board, isWhite);
 
@@ -677,14 +759,30 @@ bool Chess::moveCreatesCheck(unsigned char board[8][8], short row, short col, bo
     return false;
 }
 
+bool Chess::naiveCheck(unsigned char board[8][8], short row, short col, bool isWhite) {
+    std::pair<short, short> kingPos;
+    kingPos = getKingPos(board, isWhite);
+
+    // Need to find which pieces to check
+    auto* opponentPieces = isWhite ? &blackMoves : &whiteMoves;
+    for (auto piece: *opponentPieces) {
+        auto moves = getPieceMoves(board, piece.first.first, piece.first.second);
+        if (moves.count(kingPos) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Chess::isCheck(unsigned char board[8][8], bool isWhite) {
-    std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>* oppPieceLocations = isWhite ? &blackPieceLocations : &whitePieceLocations;
+    /* std::unordered_set<std::pair<short, short>, pair_hash, pair_equal>* oppPieceLocations = isWhite ? &blackPieceLocations : &whitePieceLocations; */
+    auto* oppPieceLocations = isWhite ? &blackMoves : &whiteMoves;
 
     // Need to find where the current players king is
     std::pair<short, short> kingPos = getKingPos(board, isWhite);
 
     for (auto it = oppPieceLocations->begin(); it != oppPieceLocations->end(); it++) {
-        auto moves = getPieceMoves(board, it->first, it->second);
+        auto moves = getPieceMoves(board, it->first.first, it->first.second);
         if (moves.count(kingPos) > 0) {
             return true;
         }
