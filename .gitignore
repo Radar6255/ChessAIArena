@@ -4,3 +4,4 @@ Makefile
 ChessAIArena
 CMakeFiles
 CMakeCache.txt
+**/target
