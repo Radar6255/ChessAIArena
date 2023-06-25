@@ -26,14 +26,16 @@ def printBoard():
 
     respJson = resp.json()
 
+    print("  | A| B| C| D| E| F| G| H|")
     for row in range(8):
-    # for row in respJson:
+        print(str(8 - row) + " ", end="")
         for col in respJson[7 - row]:
             if col == "":
                 print("|  ", end="")
             else:
                 print(f"|{col}", end="")
-        print()
+        print("| " + str(8 - row))
+    print("  | A| B| C| D| E| F| G| H|")
 
 gameStartStr = ws.recv()
 
@@ -43,6 +45,7 @@ isWhite = gameStartStr.split(":")[1].strip() == "white"
 if not isWhite:
     print(ws.recv())
 
+printBoard()
 while True:
     moves = getAllMoves()
     makeMove(input("Move: ").strip())

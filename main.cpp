@@ -20,8 +20,7 @@ int main() {
         .websocket()
         .onopen([&](crow::websocket::connection& conn) {
                     std::cout << "Connection opened" << std::endl;
-                    // TODO store some data in the connection so we can use if for later in determining which color they are and which game this connection is for
-                    /* conn.userdata(); */
+
                     // Here we want to find a match for this user
                     matchmaking.matchmake(conn);
                 })
@@ -36,7 +35,6 @@ int main() {
                     if (!success) {
                         conn.send_text("false");
                     }
-                    /* conn.send_text(success ? "true" : "false"); */
                 });
 
     CROW_ROUTE(app, "/game/<int>/moves/<string>/list")([&matchmaking](int id, std::string isWhite) {

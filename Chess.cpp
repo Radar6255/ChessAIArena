@@ -96,10 +96,16 @@ bool Chess::performMove(std::string move, bool isWhite) {
     if (isWhiteTurn != isWhite) {
         return false;
     }
+
     // First we need to figure out what the move is
     std::smatch sm;
     std::regex re("[KQRBN]?([a-h][1-8])([a-h][1-8])");
     std::regex_match(move, sm, re);
+
+    if (sm.size() < 3) {
+        std::cout << "Invalid move" << std::endl;
+        return false;
+    }
 
     // The first element is the start square
     std::string start = sm[1].str();
@@ -124,34 +130,6 @@ bool Chess::performMove(std::string move, bool isWhite) {
     if (!moves.count(destXY)) {
         return false;
     }
-
-//    bool isValid = moves.count(destXY);
-//    if (!isValid) {
-//        return false;
-//    }
-
-    // Here we are going to check for check
-//    unsigned char tmpBoard[8][8];
-//    std::memcpy(tmpBoard, board, sizeof(board));
-    // Now we need to perform the move
-    // Probably should have a lock here so no one can read the board in a bad state
-//    tmpBoard[destXY.first][destXY.second] = tmpBoard[startXY.first][startXY.second];
-//    tmpBoard[startXY.first][startXY.second] = EMPTY;
-
-
-//    if (tmpBoard[destXY.first][destXY.second] == WHITE_KING || tmpBoard[destXY.first][destXY.second] == BLACK_KING) {
-//        if (moveCreatesCheck(tmpBoard, destXY.first, destXY.second, isWhiteTurn)) {
-//            return false;
-//        }
-//    } else {
-//        if (moveCreatesCheck(tmpBoard, startXY.first, startXY.second, isWhiteTurn)) {
-//            return false;
-//        }
-//    }
-
-    /* if (isCheck(tmpBoard, isWhiteTurn)) { */
-    /*     return false; */
-    /* } */
 
     performMoveMutex.lock();
     // This could be the case if the user tried to send two moves
@@ -193,6 +171,7 @@ bool Chess::performMove(std::string move, bool isWhite) {
         if (movedPieceMoves.count(kingPos)) {
             isBlackInCheck = true;
             opponentInCheck = true;
+            std::cout << "Black in check" << std::endl;
         }
     } else {
         blackMoves.erase(startXY);
@@ -201,6 +180,7 @@ bool Chess::performMove(std::string move, bool isWhite) {
         if (movedPieceMoves.count(kingPos)) {
             isWhiteInCheck = true;
             opponentInCheck = true;
+            std::cout << "White in check" << std::endl;
         }
     }
 
@@ -224,10 +204,6 @@ bool Chess::performMove(std::string move, bool isWhite) {
     std::set_union(attackedPiecesDst.begin(), attackedPiecesDst.end(), attackedPiecesSrc.begin(), attackedPiecesSrc.end(), std::inserter(attackedPieces, attackedPieces.end()));
 
     std::set_union(affectedPiecesT.begin(), affectedPiecesT.end(), attackedPieces.begin(), attackedPieces.end(), std::inserter(affectedPieces, affectedPieces.end()));
-
-    if (move == "d8a5") {
-        std::cout << "d8a5" << std::endl;
-    }
 
     for (auto piece : affectedPieces) {
         auto newMoves = getValidMoves(piece.first, piece.second);
@@ -258,9 +234,9 @@ bool Chess::performMove(std::string move, bool isWhite) {
     }
 
     if (opponentInCheck) {
-        auto opponentMoves = isWhiteTurn ? blackMoves : whiteMoves;
+        auto opponentMoves = isWhiteTurn ? &blackMoves : &whiteMoves;
 
-        std::for_each(opponentMoves.begin(), opponentMoves.end(), [this](auto &move){
+        std::for_each(opponentMoves->begin(), opponentMoves->end(), [this](auto &move){
             std::cout << "Updating " << move.first.first << " " << move.first.second << std::endl;
             move.second = getValidMoves(move.first.first, move.first.second);
         });
@@ -272,8 +248,28 @@ bool Chess::performMove(std::string move, bool isWhite) {
         /* } */
 
         std::cout << "Updated all opponent moves" << std::endl;
+        /* whiteMoves = opponentMoves; */
+    }
 
-        whiteMoves = opponentMoves;
+    // Here we are going to check to see if we have check or checkmate for the opponent
+    auto opponentMoves = isWhiteTurn ? &blackMoves : &whiteMoves;
+    if (!opponentMoves->size()) {
+        std::cout << "GAME HAS ENDED!" << std::endl;
+
+        if (opponentInCheck) {
+            // This means that we have checkmate
+            if (isWhiteTurn) {
+                connections[1]->send_text("-loss");
+                connections[0]->send_text("-win");
+            } else {
+                connections[0]->send_text("-loss");
+                connections[1]->send_text("-win");
+            }
+        } else {
+            // This means that we have a stalemate
+            connections[1]->send_text("-draw");
+            connections[0]->send_text("-draw");
+        }
     }
 
     isWhiteTurn = !isWhiteTurn;
@@ -378,7 +374,7 @@ std::unordered_set<std::pair<short, short>, pair_hash, pair_equal> Chess::getVal
         tmpBoard[x][y] = EMPTY;
 
         if (moveCreatesCheck(tmpBoard, x, y, isPieceWhite(board[x][y]))) {
-            std::cout << "INVALID: " << (int)x << " " << (int)y << " " << move.first << " " << move.second << std::endl;
+            /* std::cout << "INVALID: " << (int)x << " " << (int)y << " " << move.first << " " << move.second << std::endl; */
             invalidMoves.insert(move);
         } else {
             /* std::cout << "VALID: " << move.first << " " << move.second << " " << x << " " << y << std::endl; */

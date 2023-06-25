@@ -11,6 +11,7 @@ ws.connect("ws://localhost:8000/ws")
 def makeMove(move):
     ws.send(move)
     moveSuccess = ws.recv()
+    print(moveSuccess)
     if moveSuccess == "false":
         print(move)
         sys.exit(1)
@@ -48,6 +49,7 @@ while True:
     moves = getAllMoves()
     makeMove(moves[random.randint(0, len(moves) - 1)])
     printBoard()
-    time.sleep(1)
+    if len(sys.argv) > 1:
+        time.sleep(float(sys.argv[1]))
 
 ws.close()
