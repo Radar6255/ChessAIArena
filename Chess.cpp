@@ -91,6 +91,10 @@ Chess::Chess(crow::websocket::connection* whiteConn, crow::websocket::connection
     }
 }
 
+void Chess::addObservor(crow::websocket::connection* observer) {
+    observers.push_back(observer);
+}
+
 bool Chess::performMove(std::string move, bool isWhite) {
     std::cout << "Performing move: " << move << std::endl;
     if (isWhiteTurn != isWhite) {
@@ -251,6 +255,13 @@ bool Chess::performMove(std::string move, bool isWhite) {
         /* whiteMoves = opponentMoves; */
     }
 
+    std::cout << "Performed " << move << std::endl;
+    // Informing observers of game state
+    for (auto observor: observers) {
+        std::cout << "Sending move: " << move << std::endl;
+        observor->send_text(move);
+    }
+
     // Here we are going to check to see if we have check or checkmate for the opponent
     auto opponentMoves = isWhiteTurn ? &blackMoves : &whiteMoves;
     if (!opponentMoves->size()) {
@@ -274,7 +285,6 @@ bool Chess::performMove(std::string move, bool isWhite) {
 
     isWhiteTurn = !isWhiteTurn;
     performMoveMutex.unlock();
-    std::cout << "Performed " << move << std::endl;
 
     /* std::stringstream moveString; */
     /* moveString << id << ":" << move; */

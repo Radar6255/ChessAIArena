@@ -2,6 +2,7 @@
 #include <crow/app.h>
 #include <crow/http_response.h>
 #include <crow/websocket.h>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include "Chess.h"
@@ -35,6 +36,23 @@ int main() {
                     if (!success) {
                         conn.send_text("false");
                     }
+                });
+
+    // This route is for observers of chess games
+    CROW_ROUTE(app, "/ws/client")
+        .websocket()
+        .onopen([&](crow::websocket::connection& conn) {
+                    std::cout << "Connection opened" << std::endl;
+                })
+        .onclose([&](crow::websocket::connection& conn, const std::string& reason) {
+                    std::cout << "Connection closed: " << reason << std::endl;
+                })
+        .onmessage([&matchmaking](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
+                    std::cout << "Message received: " << data << std::endl;
+                    ChessPlayer *playerData = static_cast<ChessPlayer*>(conn.userdata());
+
+                    matchmaking.getGame(atoi(data.c_str()))->addObservor(&conn);
+                    conn.send_text("watching");
                 });
 
     CROW_ROUTE(app, "/game/<int>/moves/<string>/list")([&matchmaking](int id, std::string isWhite) {

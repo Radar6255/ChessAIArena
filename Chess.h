@@ -58,6 +58,8 @@ public:
     std::stringstream getBoardStateBasic();
     std::stringstream getPieceLocations(bool isWhite);
     std::stringstream getPieceLocationsList(bool isWhite);
+
+    void addObservor(crow::websocket::connection* observer);
 private:
     std::atomic<bool> isWhiteTurn;
     std::mutex performMoveMutex;
@@ -66,6 +68,7 @@ private:
     bool isBlackInCheck;
 
     crow::websocket::connection* connections[2];
+    std::vector<crow::websocket::connection*> observers;
     size_t id;
 
     unsigned char board[8][8] = {
